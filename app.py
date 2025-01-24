@@ -1,41 +1,16 @@
-
 import os
 from flask import Flask, request, jsonify
 import tensorflow as tf
 import joblib
 import numpy as np
-
-# Importer les bibliothèques pour Azure Application Insights
-from opencensus.ext.azure.log_exporter import AzureLogHandler
-from opencensus.ext.azure.trace_exporter import AzureExporter
-from opencensus.ext.azure.metrics_exporter import MetricsExporter
-from opencensus.metrics.transport import TransportType
-from opencensus.trace import config_integration
-from opencensus.trace.samplers import ProbabilitySampler
-from opencensus.trace.tracer import Tracer
 import logging
 
 # Initialiser l'application Flask
 app = Flask(__name__)
 
-# Configurer Application Insights
-INSTRUMENTATION_KEY = "47019b65-b8ca-40be-95c8-a0552c3b62b3"  # Remplace par ta clé d'instrumentation
+# Configurer les logs pour Heroku
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(AzureLogHandler(connection_string=f"InstrumentationKey={INSTRUMENTATION_KEY}"))
-
-# Configurer les intégrations pour la journalisation et les requêtes
-config_integration.trace_integrations(['logging', 'requests'])
-
-# Initialiser le traceur pour enregistrer les traces
-tracer = Tracer(exporter=AzureExporter(connection_string=f"InstrumentationKey={INSTRUMENTATION_KEY}"),
-                sampler=ProbabilitySampler(1.0))
-
-# Configurer les métriques pour Application Insights
-metrics_exporter = MetricsExporter(
-    connection_string=f"InstrumentationKey={INSTRUMENTATION_KEY}",
-    transport_type=TransportType.HTTP
-)
 
 # Charger le modèle LSTM
 try:
@@ -47,7 +22,7 @@ except Exception as e:
 
 # Charger le tokenizer
 try:
-    tokenizer = joblib.load("tokenizer.pkl")  # Assurez-vous que le fichier tokenizer.pkl existe dans le même dossier
+    tokenizer = joblib.load("tokenizer.pkl")
     logger.info("Tokenizer chargé avec succès.")
 except Exception as e:
     logger.error(f"Erreur lors du chargement du tokenizer : {e}")
@@ -55,47 +30,38 @@ except Exception as e:
 
 @app.route("/")
 def home():
-    tracer.span(name="home")  # Ajouter une trace pour la route d'accueil
-    return "Bienvenue sur mon API Flask déployée sur Heroku avec Azure !"
+    return "Bienvenue sur mon API Flask déployée sur Heroku !"
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    with tracer.span(name="predict") as span:
-        try:
-            data = request.get_json()
-            tweets = data.get('tweets', [])
-            if not tweets:
-                return jsonify({"error": "Aucun tweet fourni."}), 400
+    try:
+        data = request.get_json()
+        tweets = data.get('tweets', [])
+        if not tweets:
+            return jsonify({"error": "Aucun tweet fourni."}), 400
 
-            # Transformer les tweets en séquences
-            sequences = tokenizer.texts_to_sequences(tweets)
-            max_length = 100  # Longueur maximale des séquences, ajustez si nécessaire
-            padded_sequences = tf.keras.preprocessing.sequence.pad_sequences(sequences, maxlen=max_length)
+        if model is None or tokenizer is None:
+            return jsonify({"error": "Modèle ou tokenizer non chargé."}), 500
 
-            # Faire les prédictions
-            predictions = model.predict(padded_sequences)
+        # Préparer les tweets pour le modèle
+        sequences = tokenizer.texts_to_sequences(tweets)
+        max_length = 100
+        padded_sequences = tf.keras.preprocessing.sequence.pad_sequences(sequences, maxlen=max_length)
 
-            # Formater les résultats
-            results = [
-                {
-                    "tweet": tweet,
-                    "sentiment": "positif" if prediction > 0.5 else "négatif"
-                }
-                for tweet, prediction in zip(tweets, predictions.flatten())
-            ]
+        # Faire les prédictions
+        predictions = model.predict(padded_sequences)
 
-            # Logger les tweets mal prédits (exemple : loguer les sentiments négatifs)
-            for result in results:
-                if result["sentiment"] == "négatif":
-                    logger.warning(f"Tweet mal prédit : {result}")
+        # Formater les résultats
+        results = [
+            {"tweet": tweet, "sentiment": "positif" if prediction > 0.5 else "négatif"}
+            for tweet, prediction in zip(tweets, predictions.flatten())
+        ]
 
-            return jsonify({"predictions": results})
-        except Exception as e:
-            logger.error(f"Erreur lors de la prédiction : {e}")
-            return jsonify({"error": str(e)}), 500
+        return jsonify({"predictions": results})
+    except Exception as e:
+        logger.error(f"Erreur lors de la prédiction : {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    # Utiliser le port attribué par Heroku ou 5000 par défaut
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
