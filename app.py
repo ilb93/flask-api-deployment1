@@ -1,75 +1,47 @@
 import os
-from flask import Flask, request, jsonify
 import tensorflow as tf
 import joblib
-import numpy as np
-import logging
+from flask import Flask, request, jsonify
 
-# Initialiser l'application Flask
 app = Flask(__name__)
 
-# Configuration du logger
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Charger le modèle LSTM
-model = None
-tokenizer = None
+# Chargement du modèle et du tokenizer
+MODEL_PATH = "lstm_model.keras"
+TOKENIZER_PATH = "tokenizer.pkl"
 
 try:
-    model = tf.keras.models.load_model("lstm_model.keras")
-    logger.info("Modèle LSTM chargé avec succès.")
+    model = tf.keras.models.load_model(MODEL_PATH)
+    tokenizer = joblib.load(TOKENIZER_PATH)
+    print("Modèle et tokenizer chargés avec succès.")
 except Exception as e:
-    logger.error(f"Erreur lors du chargement du modèle LSTM : {e}")
+    model = None
+    tokenizer = None
+    app.logger.error(f"Erreur lors du chargement : {e}")
 
-# Charger le tokenizer
-try:
-    tokenizer = joblib.load("tokenizer.pkl")
-    logger.info("Tokenizer chargé avec succès.")
-except Exception as e:
-    logger.error(f"Erreur lors du chargement du tokenizer : {e}")
-
-@app.route("/")
+@app.route("/", methods=["GET"])
 def home():
-    return "Bienvenue sur l'API de prédiction de sentiments !"
+    return "L'API Flask est opérationnelle."
 
 @app.route("/predict", methods=["POST"])
 def predict():
     if not model or not tokenizer:
         return jsonify({"error": "Modèle ou tokenizer non chargé."}), 500
 
+    data = request.get_json()
+    if not data or "tweets" not in data:
+        return jsonify({"error": "Données manquantes ou mal formatées."}), 400
+
+    tweets = data["tweets"]
     try:
-        data = request.get_json()
-        tweets = data.get('tweets', [])
-
-        if not tweets or not isinstance(tweets, list):
-            return jsonify({"error": "Veuillez fournir une liste de tweets."}), 400
-
-        # Transformer les tweets en séquences
         sequences = tokenizer.texts_to_sequences(tweets)
-        max_length = 100  # Longueur maximale des séquences
-        padded_sequences = tf.keras.preprocessing.sequence.pad_sequences(sequences, maxlen=max_length)
-
-        # Faire les prédictions
-        predictions = model.predict(padded_sequences)
-
-        # Formater les résultats
-        results = [
-            {
-                "tweet": tweet,
-                "sentiment": "positif" if prediction > 0.5 else "négatif"
-            }
-            for tweet, prediction in zip(tweets, predictions.flatten())
-        ]
-
-        return jsonify({"predictions": results})
-
+        predictions = model.predict(sequences).flatten().tolist()
+        return jsonify({"predictions": predictions})
     except Exception as e:
-        logger.error(f"Erreur lors de la prédiction : {e}")
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Erreur lors de la prédiction : {e}")
+        return jsonify({"error": "Erreur lors de la prédiction."}), 500
 
 if __name__ == "__main__":
-    # Utiliser le port attribué par Heroku ou 5000 par défaut
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
