@@ -1,10 +1,10 @@
-Flask==3.1.0
-gunicorn==20.1.0
-numpy==1.26.0
-pandas==1.5.3
-scikit-learn==1.2.2
-h5py==3.12.1
-joblib==1.4.2
-opencensus==0.7.13
-opencensus-ext-azure==1.0.7
-tensorflow-cpu==2.18.0
+Flask==2.2.5  # Version stable et compatible avec de nombreuses bibliothèques
+gunicorn==20.1.0  # Serveur WSGI pour déployer sur Heroku
+numpy==1.26.0  # Dernière version pour le calcul scientifique
+pandas==1.5.3  # Pour la manipulation de données
+scikit-learn==1.2.2  # Pour les tâches de machine learning
+h5py==3.12.1  # Nécessaire pour manipuler des fichiers HDF5 (sauvegardes modèles TensorFlow)
+joblib==1.2.0  # Gestionnaire de sauvegarde d'objets Python (comme tokenizer)
+opencensus==0.11.0  # Dernière version fonctionnelle pour OpenCensus
+opencensus-ext-azure==1.1.7  # Version stable pour la compatibilité avec OpenCensus
+tensorflow-cpu==2.11.0  # Version CPU pour économiser de la mémoire sur Heroku
