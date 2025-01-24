@@ -8,7 +8,6 @@ import numpy as np
 from opencensus.ext.azure.log_exporter import AzureLogHandler
 from opencensus.ext.azure.trace_exporter import AzureExporter
 from opencensus.ext.azure.metrics_exporter import MetricsExporter
-from opencensus.metrics.transport import TransportType
 from opencensus.trace import config_integration
 from opencensus.trace.samplers import ProbabilitySampler
 from opencensus.trace.tracer import Tracer
@@ -32,8 +31,7 @@ tracer = Tracer(exporter=AzureExporter(connection_string=f"InstrumentationKey={I
 
 # Configurer les métriques pour Application Insights
 metrics_exporter = MetricsExporter(
-    connection_string=f"InstrumentationKey={INSTRUMENTATION_KEY}",
-    transport_type=TransportType.HTTP
+    connection_string=f"InstrumentationKey={INSTRUMENTATION_KEY}"
 )
 
 # Charger le modèle LSTM
@@ -97,3 +95,4 @@ if __name__ == "__main__":
     # Utiliser le port attribué par Heroku ou 5000 par défaut
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
