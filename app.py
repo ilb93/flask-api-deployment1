@@ -1,3 +1,4 @@
+
 import os
 from flask import Flask, request, jsonify
 import tensorflow as tf
@@ -8,6 +9,7 @@ import numpy as np
 from opencensus.ext.azure.log_exporter import AzureLogHandler
 from opencensus.ext.azure.trace_exporter import AzureExporter
 from opencensus.ext.azure.metrics_exporter import MetricsExporter
+from opencensus.metrics.transport import TransportType
 from opencensus.trace import config_integration
 from opencensus.trace.samplers import ProbabilitySampler
 from opencensus.trace.tracer import Tracer
@@ -31,7 +33,8 @@ tracer = Tracer(exporter=AzureExporter(connection_string=f"InstrumentationKey={I
 
 # Configurer les métriques pour Application Insights
 metrics_exporter = MetricsExporter(
-    connection_string=f"InstrumentationKey={INSTRUMENTATION_KEY}"
+    connection_string=f"InstrumentationKey={INSTRUMENTATION_KEY}",
+    transport_type=TransportType.HTTP
 )
 
 # Charger le modèle LSTM
@@ -52,12 +55,12 @@ except Exception as e:
 
 @app.route("/")
 def home():
-    with tracer.span(name="home"):
-        return "Bienvenue sur mon API Flask déployée sur Heroku avec Azure !"
+    tracer.span(name="home")  # Ajouter une trace pour la route d'accueil
+    return "Bienvenue sur mon API Flask déployée sur Heroku avec Azure !"
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    with tracer.span(name="predict"):
+    with tracer.span(name="predict") as span:
         try:
             data = request.get_json()
             tweets = data.get('tweets', [])
@@ -80,6 +83,11 @@ def predict():
                 }
                 for tweet, prediction in zip(tweets, predictions.flatten())
             ]
+
+            # Logger les tweets mal prédits (exemple : loguer les sentiments négatifs)
+            for result in results:
+                if result["sentiment"] == "négatif":
+                    logger.warning(f"Tweet mal prédit : {result}")
 
             return jsonify({"predictions": results})
         except Exception as e:
